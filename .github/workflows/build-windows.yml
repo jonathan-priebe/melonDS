@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - master
+      - wifi-p2p/natfix
 
 env:
   MELONDS_GIT_BRANCH: ${{ github.ref }}
