@@ -26,6 +26,8 @@
 
 #include <libslirp.h>
 #include <vector>
+#include <map>
+#include <chrono>
 
 #ifdef __WIN32__
     #include <ws2tcpip.h>
@@ -55,11 +57,27 @@ public:
     bool RemovePortForward(bool is_udp, u16 host_port) noexcept;
     void ClearPortForwards() noexcept;
     void EnableDynamicPortForwarding(bool enable) noexcept { DynamicPortForwardingEnabled = enable; }
+    void SetExternalIP(u32 ip) noexcept { ExternalIP = ip; }
 
 private:
+    // NAT-PMP structures
+    struct PortMapping {
+        u16 internal_port;
+        u16 external_port;
+        bool is_udp;
+        std::chrono::steady_clock::time_point expiry;
+    };
+
     void HandleDynamicPortForwarding(u8* data, int len) noexcept;
+    void HandleNATPMP(u8* data, int len) noexcept;
+    void SendNATPMPResponse(u8 opcode, u16 result_code, u32 epoch, const u8* payload, int payload_len) noexcept;
+    u32 GetExternalIP() noexcept;
+
     bool DynamicPortForwardingEnabled = false;
     std::vector<u16> ForwardedPorts;
+    std::map<u16, PortMapping> PortMappings; // Key: internal port
+    u32 ExternalIP = 0; // Cached external IP
+    u32 NATPMPEpoch = 0; // Seconds since NAT-PMP started
     static constexpr int PollListMax = 64;
     static const SlirpCb cb;
     static int SlirpCbGetREvents(int idx, void* opaque) noexcept;

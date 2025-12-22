@@ -27,11 +27,15 @@
 
 #ifdef __WIN32__
 	#include <ws2tcpip.h>
+	#include <iphlpapi.h>
+	#pragma comment(lib, "iphlpapi.lib")
 #else
 	#include <sys/socket.h>
 	#include <netdb.h>
 	#include <poll.h>
 	#include <time.h>
+	#include <ifaddrs.h>
+	#include <net/if.h>
 #endif
 
 namespace melonDS
@@ -423,9 +427,18 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
         if (protocol == 0x11) // UDP
         {
             u16 dstport = ntohs(*(u16*)&data[0x24]);
-            if (dstport == 53 && htonl(*(u32*)&data[0x1E]) == kDNSIP) // DNS
+            u32 dstip = ntohl(*(u32*)&data[0x1E]);
+
+            if (dstport == 53 && dstip == kDNSIP) // DNS
             {
                 HandleDNSFrame(data, len);
+                return len;
+            }
+
+            // Handle NAT-PMP requests (port 5351 to gateway)
+            if (dstport == 5351 && dstip == kServerIP)
+            {
+                HandleNATPMP(data, len);
                 return len;
             }
 
@@ -562,6 +575,252 @@ void Net_Slirp::ClearPortForwards() noexcept
     Log(LogLevel::Info, "Net_Slirp: Clearing all port forwards\n");
     // Note: libslirp doesn't provide a "clear all" function,
     // so individual forwards need to be tracked and removed by the caller
+}
+
+u32 Net_Slirp::GetExternalIP() noexcept
+{
+    if (ExternalIP != 0)
+        return ExternalIP;
+
+#ifdef __WIN32__
+    // Get external IP on Windows
+    PIP_ADAPTER_INFO pAdapterInfo = nullptr;
+    ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
+
+    pAdapterInfo = (IP_ADAPTER_INFO*)malloc(ulOutBufLen);
+    if (!pAdapterInfo)
+        return 0;
+
+    if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW)
+    {
+        free(pAdapterInfo);
+        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(ulOutBufLen);
+        if (!pAdapterInfo)
+            return 0;
+    }
+
+    if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == NO_ERROR)
+    {
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter)
+        {
+            // Skip loopback
+            if (pAdapter->Type != MIB_IF_TYPE_LOOPBACK)
+            {
+                struct in_addr addr;
+                if (inet_pton(AF_INET, pAdapter->IpAddressList.IpAddress.String, &addr) == 1)
+                {
+                    ExternalIP = ntohl(addr.s_addr);
+                    Log(LogLevel::Info, "Net_Slirp: Detected external IP: %s\n",
+                        pAdapter->IpAddressList.IpAddress.String);
+                    break;
+                }
+            }
+            pAdapter = pAdapter->Next;
+        }
+    }
+    free(pAdapterInfo);
+#else
+    // Get external IP on Linux/Unix
+    struct ifaddrs *ifaddr, *ifa;
+
+    if (getifaddrs(&ifaddr) == -1)
+        return 0;
+
+    for (ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next)
+    {
+        if (ifa->ifa_addr == nullptr)
+            continue;
+
+        // Skip loopback and non-IPv4
+        if ((ifa->ifa_flags & IFF_LOOPBACK) || ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+
+        struct sockaddr_in *addr = (struct sockaddr_in*)ifa->ifa_addr;
+        ExternalIP = ntohl(addr->sin_addr.s_addr);
+
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr->sin_addr, ip_str, INET_ADDRSTRLEN);
+        Log(LogLevel::Info, "Net_Slirp: Detected external IP: %s\n", ip_str);
+        break;
+    }
+
+    freeifaddrs(ifaddr);
+#endif
+
+    return ExternalIP;
+}
+
+void Net_Slirp::SendNATPMPResponse(u8 opcode, u16 result_code, u32 epoch, const u8* payload, int payload_len) noexcept
+{
+    u8 response[512];
+    u8* ptr = response;
+
+    // Ethernet header (to guest) - use broadcast for simplicity
+    static const u8 broadcast_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    memcpy(ptr, broadcast_mac, 6); ptr += 6; // Dest: broadcast
+    memcpy(ptr, kServerMAC, 6); ptr += 6;    // Source: server
+    *(u16*)ptr = htons(0x0800); ptr += 2;    // IPv4
+
+    // IP header
+    u8* ip_header = ptr;
+    *ptr++ = 0x45; // Version 4, header length 5
+    *ptr++ = 0x00; // DSCP/ECN
+    *(u16*)ptr = 0; ptr += 2; // Total length (fill later)
+    *(u16*)ptr = htons(IPv4ID++); ptr += 2;
+    *(u16*)ptr = 0; ptr += 2; // Flags/fragment
+    *ptr++ = 64; // TTL
+    *ptr++ = 17; // UDP
+    *(u16*)ptr = 0; ptr += 2; // Checksum (fill later)
+    *(u32*)ptr = htonl(kServerIP); ptr += 4; // Source: gateway
+    *(u32*)ptr = htonl(kClientIP); ptr += 4; // Dest: guest
+
+    // UDP header
+    u8* udp_header = ptr;
+    *(u16*)ptr = htons(5351); ptr += 2; // Source port (NAT-PMP)
+    *(u16*)ptr = htons(5351); ptr += 2; // Dest port
+    *(u16*)ptr = 0; ptr += 2; // Length (fill later)
+    *(u16*)ptr = 0; ptr += 2; // Checksum
+
+    // NAT-PMP payload
+    *ptr++ = 0; // Version
+    *ptr++ = opcode | 0x80; // Response opcode
+    *(u16*)ptr = htons(result_code); ptr += 2;
+    *(u32*)ptr = htonl(epoch); ptr += 4;
+
+    if (payload && payload_len > 0)
+    {
+        memcpy(ptr, payload, payload_len);
+        ptr += payload_len;
+    }
+
+    // Fill in lengths
+    int total_len = ptr - ip_header;
+    int udp_len = ptr - udp_header;
+    *(u16*)(ip_header + 2) = htons(total_len);
+    *(u16*)(udp_header + 4) = htons(udp_len);
+
+    // Calculate IP checksum
+    u32 sum = 0;
+    for (int i = 0; i < 20; i += 2)
+        sum += ntohs(*(u16*)(ip_header + i));
+    while (sum >> 16)
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    *(u16*)(ip_header + 10) = htons(~sum);
+
+    int frame_len = ptr - response;
+    if (Callback)
+        Callback(response, frame_len);
+}
+
+void Net_Slirp::HandleNATPMP(u8* data, int len) noexcept
+{
+    if (len < 0x2A + 2) // Ethernet + IP + UDP headers + version + opcode
+        return;
+
+    u8* natpmp_data = &data[0x2A]; // Start of NAT-PMP payload
+    int natpmp_len = len - 0x2A;
+
+    if (natpmp_len < 2)
+        return;
+
+    u8 version = natpmp_data[0];
+    u8 opcode = natpmp_data[1];
+
+    if (version != 0)
+        return;
+
+    u32 epoch = static_cast<u32>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+
+    Log(LogLevel::Debug, "NAT-PMP: Received request opcode %d\n", opcode);
+
+    switch (opcode)
+    {
+        case 0: // External IP address request
+        {
+            u32 external_ip = GetExternalIP();
+            u8 payload[4];
+            *(u32*)payload = htonl(external_ip);
+            SendNATPMPResponse(opcode, 0, epoch, payload, 4);
+            Log(LogLevel::Info, "NAT-PMP: Responded with external IP: %d.%d.%d.%d\n",
+                (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF,
+                (external_ip >> 8) & 0xFF, external_ip & 0xFF);
+            break;
+        }
+
+        case 1: // UDP port mapping request
+        case 2: // TCP port mapping request
+        {
+            if (natpmp_len < 12)
+            {
+                SendNATPMPResponse(opcode, 1, epoch, nullptr, 0); // Unsupported version
+                return;
+            }
+
+            bool is_udp = (opcode == 1);
+            u16 internal_port = ntohs(*(u16*)&natpmp_data[4]);
+            u16 external_port = ntohs(*(u16*)&natpmp_data[6]);
+            u32 lifetime = ntohl(*(u32*)&natpmp_data[8]);
+
+            Log(LogLevel::Info, "NAT-PMP: %s port mapping request: internal=%d, external=%d, lifetime=%d\n",
+                is_udp ? "UDP" : "TCP", internal_port, external_port, lifetime);
+
+            // If external_port is 0, assign automatically
+            if (external_port == 0)
+                external_port = internal_port;
+
+            if (lifetime == 0)
+            {
+                // Remove mapping
+                RemovePortForward(is_udp, external_port);
+                PortMappings.erase(internal_port);
+
+                u8 payload[12];
+                *(u16*)&payload[0] = 0; // Reserved
+                *(u16*)&payload[2] = htons(internal_port);
+                *(u16*)&payload[4] = htons(external_port);
+                *(u32*)&payload[8] = 0;
+                SendNATPMPResponse(opcode, 0, epoch, payload, 12);
+
+                Log(LogLevel::Info, "NAT-PMP: Removed %s mapping for port %d\n",
+                    is_udp ? "UDP" : "TCP", external_port);
+            }
+            else
+            {
+                // Add mapping
+                if (AddPortForward(is_udp, external_port, internal_port))
+                {
+                    PortMapping mapping;
+                    mapping.internal_port = internal_port;
+                    mapping.external_port = external_port;
+                    mapping.is_udp = is_udp;
+                    mapping.expiry = std::chrono::steady_clock::now() +
+                                   std::chrono::seconds(lifetime);
+                    PortMappings[internal_port] = mapping;
+
+                    u8 payload[12];
+                    *(u16*)&payload[0] = 0; // Reserved
+                    *(u16*)&payload[2] = htons(internal_port);
+                    *(u16*)&payload[4] = htons(external_port);
+                    *(u32*)&payload[8] = htonl(lifetime);
+                    SendNATPMPResponse(opcode, 0, epoch, payload, 12);
+
+                    Log(LogLevel::Info, "NAT-PMP: Added %s mapping %d -> %d (lifetime: %ds)\n",
+                        is_udp ? "UDP" : "TCP", external_port, internal_port, lifetime);
+                }
+                else
+                {
+                    SendNATPMPResponse(opcode, 3, epoch, nullptr, 0); // Network failure
+                }
+            }
+            break;
+        }
+
+        default:
+            SendNATPMPResponse(opcode, 5, epoch, nullptr, 0); // Unsupported opcode
+            break;
+    }
 }
 
 }
