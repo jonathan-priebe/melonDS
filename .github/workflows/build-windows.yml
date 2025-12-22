@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - ci/*
+      - wifi-p2p/natfix
   pull_request:
     branches:
       - master
