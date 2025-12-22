@@ -71,6 +71,114 @@
     </widget>
    </item>
    <item>
+    <widget class="QGroupBox" name="groupBox_P2P">
+     <property name="title">
+      <string>Indirect mode P2P settings</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_P2P">
+      <item>
+       <widget class="QCheckBox" name="cbEnableP2P">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Enables peer-to-peer NAT negotiation for games like Pokémon Diamond/Pearl Wi-Fi Club. This opens dynamic port forwards through libslirp to allow P2P connections.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Enable P2P NAT negotiation (for Pokémon Diamond/Pearl Wi-Fi Club, etc.)</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBoxP2PMode">
+        <property name="title">
+         <string>Port forwarding mode</string>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayoutP2PMode">
+         <item>
+          <widget class="QRadioButton" name="rbP2PAuto">
+           <property name="whatsThis">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Automatically detects when the DS opens UDP ports and forwards them dynamically (UPnP-style). Recommended for most users.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string>Automatic (UPnP-style, recommended)</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="rbP2PManual">
+           <property name="whatsThis">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually forward a specific port range. Use this if automatic mode doesn't work.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string>Manual port range</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayoutPortRange">
+           <item>
+            <widget class="QLabel" name="lblPortRangeStart">
+             <property name="text">
+              <string>Port range:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="spinPortRangeStart">
+             <property name="minimum">
+              <number>1024</number>
+             </property>
+             <property name="maximum">
+              <number>65535</number>
+             </property>
+             <property name="value">
+              <number>50000</number>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblPortRangeTo">
+             <property name="text">
+              <string>to</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="spinPortRangeEnd">
+             <property name="minimum">
+              <number>1024</number>
+             </property>
+             <property name="maximum">
+              <number>65535</number>
+             </property>
+             <property name="value">
+              <number>60000</number>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacerPortRange">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="groupBox_3">
      <property name="title">
       <string>Direct mode settings</string>

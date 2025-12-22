@@ -84,7 +84,21 @@ WifiSettingsDialog::WifiSettingsDialog(QWidget* parent) : QDialog(parent), ui(ne
     ui->rbIndirectMode->setChecked(!direct);
     if (!haspcap) ui->rbDirectMode->setEnabled(false);
 
+    // P2P settings
+    bool enableP2P = cfg.GetBool("LAN.EnableP2P");
+    ui->cbEnableP2P->setChecked(enableP2P);
+
+    bool autoMode = cfg.GetBool("LAN.P2P.AutoMode");
+    ui->rbP2PAuto->setChecked(autoMode);
+    ui->rbP2PManual->setChecked(!autoMode);
+
+    int portStart = cfg.GetInt("LAN.P2P.PortRangeStart");
+    int portEnd = cfg.GetInt("LAN.P2P.PortRangeEnd");
+    ui->spinPortRangeStart->setValue(portStart);
+    ui->spinPortRangeEnd->setValue(portEnd);
+
     updateAdapterControls();
+    updateP2PControls();
 }
 
 WifiSettingsDialog::~WifiSettingsDialog()
@@ -108,6 +122,10 @@ void WifiSettingsDialog::done(int r)
         auto& cfg = emuInstance->getGlobalConfig();
 
         cfg.SetBool("LAN.DirectMode", ui->rbDirectMode->isChecked());
+        cfg.SetBool("LAN.EnableP2P", ui->cbEnableP2P->isChecked());
+        cfg.SetBool("LAN.P2P.AutoMode", ui->rbP2PAuto->isChecked());
+        cfg.SetInt("LAN.P2P.PortRangeStart", ui->spinPortRangeStart->value());
+        cfg.SetInt("LAN.P2P.PortRangeEnd", ui->spinPortRangeEnd->value());
 
         int sel = ui->cbxDirectAdapter->currentIndex();
         if (sel < 0 || sel >= adapters.size()) sel = 0;
@@ -165,9 +183,43 @@ void WifiSettingsDialog::on_cbxDirectAdapter_currentIndexChanged(int sel)
 
 void WifiSettingsDialog::updateAdapterControls()
 {
-    bool enable = haspcap && ui->rbDirectMode->isChecked();
+    bool directMode = ui->rbDirectMode->isChecked();
+    bool enable = haspcap && directMode;
 
     ui->cbxDirectAdapter->setEnabled(enable);
     ui->lblAdapterMAC->setEnabled(enable);
     ui->lblAdapterIP->setEnabled(enable);
+
+    // P2P settings are only available in indirect mode
+    ui->groupBox_P2P->setEnabled(!directMode);
+}
+
+void WifiSettingsDialog::updateP2PControls()
+{
+    bool p2pEnabled = ui->cbEnableP2P->isChecked();
+    bool manualMode = ui->rbP2PManual->isChecked();
+
+    ui->groupBoxP2PMode->setEnabled(p2pEnabled);
+
+    // Port range controls only enabled in manual mode
+    bool enablePortRange = p2pEnabled && manualMode;
+    ui->lblPortRangeStart->setEnabled(enablePortRange);
+    ui->spinPortRangeStart->setEnabled(enablePortRange);
+    ui->lblPortRangeTo->setEnabled(enablePortRange);
+    ui->spinPortRangeEnd->setEnabled(enablePortRange);
+}
+
+void WifiSettingsDialog::on_cbEnableP2P_clicked()
+{
+    updateP2PControls();
+}
+
+void WifiSettingsDialog::on_rbP2PAuto_clicked()
+{
+    updateP2PControls();
+}
+
+void WifiSettingsDialog::on_rbP2PManual_clicked()
+{
+    updateP2PControls();
 }

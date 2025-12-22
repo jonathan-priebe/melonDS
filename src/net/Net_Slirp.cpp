@@ -365,6 +365,46 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
         Callback(resp, framelen);
 }
 
+void Net_Slirp::HandleDynamicPortForwarding(u8* data, int len) noexcept
+{
+    if (!DynamicPortForwardingEnabled || len < 0x2A)
+        return;
+
+    u16 ethertype = ntohs(*(u16*)&data[0xC]);
+    if (ethertype != 0x800) // Not IPv4
+        return;
+
+    u8 protocol = data[0x17];
+    if (protocol != 0x11) // Not UDP
+        return;
+
+    // Extract source IP and port from outgoing packet
+    u32 srcip = ntohl(*(u32*)&data[0x1A]);
+    u16 srcport = ntohs(*(u16*)&data[0x22]);
+
+    // Check if this is from our guest (10.64.0.16)
+    if (srcip != kClientIP)
+        return;
+
+    // Ignore low ports and DNS
+    if (srcport < 1024 || srcport == 53)
+        return;
+
+    // Check if we already forwarded this port
+    for (u16 port : ForwardedPorts)
+    {
+        if (port == srcport)
+            return; // Already forwarded
+    }
+
+    // Add dynamic port forward
+    if (AddPortForward(true, srcport, srcport))
+    {
+        ForwardedPorts.push_back(srcport);
+        Log(LogLevel::Info, "Net_Slirp: Dynamic port forward added for UDP port %d\n", srcport);
+    }
+}
+
 int Net_Slirp::SendPacket(u8* data, int len) noexcept
 {
     if (!Ctx) return 0;
@@ -388,6 +428,9 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
                 HandleDNSFrame(data, len);
                 return len;
             }
+
+            // Handle dynamic port forwarding for outgoing UDP packets
+            HandleDynamicPortForwarding(data, len);
         }
     }
 
@@ -456,6 +499,69 @@ void Net_Slirp::RecvCheck() noexcept
         int res = poll(PollList, PollListSize, timeout);
         slirp_pollfds_poll(Ctx, res<0, SlirpCbGetREvents, this);
     }
+}
+
+bool Net_Slirp::AddPortForward(bool is_udp, u16 host_port, u16 guest_port) noexcept
+{
+    if (!Ctx)
+    {
+        Log(LogLevel::Error, "Net_Slirp::AddPortForward: Slirp context not initialized\n");
+        return false;
+    }
+
+    struct in_addr host_addr;
+    struct in_addr guest_addr;
+
+    host_addr.s_addr = 0; // Listen on all interfaces (0.0.0.0)
+    guest_addr.s_addr = htonl(kClientIP); // Forward to guest (10.64.0.16)
+
+    int result = slirp_add_hostfwd(Ctx, is_udp ? 1 : 0, host_addr, host_port, guest_addr, guest_port);
+
+    if (result < 0)
+    {
+        Log(LogLevel::Error, "Net_Slirp::AddPortForward: Failed to add %s port forward %d -> %d\n",
+            is_udp ? "UDP" : "TCP", host_port, guest_port);
+        return false;
+    }
+
+    Log(LogLevel::Info, "Net_Slirp: Added %s port forward %d -> 10.64.0.16:%d\n",
+        is_udp ? "UDP" : "TCP", host_port, guest_port);
+    return true;
+}
+
+bool Net_Slirp::RemovePortForward(bool is_udp, u16 host_port) noexcept
+{
+    if (!Ctx)
+    {
+        Log(LogLevel::Error, "Net_Slirp::RemovePortForward: Slirp context not initialized\n");
+        return false;
+    }
+
+    struct in_addr host_addr;
+    host_addr.s_addr = 0; // Same as when adding
+
+    int result = slirp_remove_hostfwd(Ctx, is_udp ? 1 : 0, host_addr, host_port);
+
+    if (result < 0)
+    {
+        Log(LogLevel::Warn, "Net_Slirp::RemovePortForward: Failed to remove %s port forward %d\n",
+            is_udp ? "UDP" : "TCP", host_port);
+        return false;
+    }
+
+    Log(LogLevel::Info, "Net_Slirp: Removed %s port forward %d\n",
+        is_udp ? "UDP" : "TCP", host_port);
+    return true;
+}
+
+void Net_Slirp::ClearPortForwards() noexcept
+{
+    if (!Ctx)
+        return;
+
+    Log(LogLevel::Info, "Net_Slirp: Clearing all port forwards\n");
+    // Note: libslirp doesn't provide a "clear all" function,
+    // so individual forwards need to be tracked and removed by the caller
 }
 
 }

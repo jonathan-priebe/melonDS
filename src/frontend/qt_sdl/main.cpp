@@ -108,9 +108,37 @@ void NetInit()
     }
     else
     {
-        net.SetDriver(std::make_unique<Net_Slirp>([](const u8* data, int len) {
+        auto slirp = std::make_unique<Net_Slirp>([](const u8* data, int len) {
             net.RXEnqueue(data, len);
-        }));
+        });
+
+        // Apply P2P port forwards if enabled
+        if (cfg.GetBool("LAN.EnableP2P"))
+        {
+            bool autoMode = cfg.GetBool("LAN.P2P.AutoMode");
+
+            if (autoMode)
+            {
+                // Enable dynamic port forwarding (UPnP-style)
+                slirp->EnableDynamicPortForwarding(true);
+                Platform::Log(Platform::LogLevel::Info, "Net: Enabled dynamic P2P port forwarding (UPnP-style)\n");
+            }
+            else
+            {
+                // Manual port range forwarding
+                int portStart = cfg.GetInt("LAN.P2P.PortRangeStart");
+                int portEnd = cfg.GetInt("LAN.P2P.PortRangeEnd");
+
+                Platform::Log(Platform::LogLevel::Info, "Net: Forwarding UDP port range %d-%d for P2P\n", portStart, portEnd);
+
+                for (int port = portStart; port <= portEnd; port++)
+                {
+                    slirp->AddPortForward(true, port, port);  // UDP
+                }
+            }
+        }
+
+        net.SetDriver(std::move(slirp));
     }
 }
 

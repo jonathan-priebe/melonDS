@@ -72,6 +72,8 @@ DefaultList<int> DefaultInts =
     {"Instance*.Gdb.ARM9.Port", 3333},
 #endif
     {"LAN.HostNumPlayers", 16},
+    {"LAN.P2P.PortRangeStart", 50000},
+    {"LAN.P2P.PortRangeEnd", 60000},
 };
 
 RangeList IntRanges =
@@ -111,6 +113,8 @@ DefaultList<bool> DefaultBools =
 #endif
 #endif
     {"DSi.DSP.HLE", true},
+    {"LAN.EnableP2P", false},
+    {"LAN.P2P.AutoMode", true},
 };
 
 DefaultList<std::string> DefaultStrings =

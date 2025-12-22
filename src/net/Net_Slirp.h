@@ -25,6 +25,7 @@
 #include "NetDriver.h"
 
 #include <libslirp.h>
+#include <vector>
 
 #ifdef __WIN32__
     #include <ws2tcpip.h>
@@ -48,7 +49,17 @@ public:
 
     int SendPacket(u8* data, int len) noexcept override;
     void RecvCheck() noexcept override;
+
+    // Port forwarding methods
+    bool AddPortForward(bool is_udp, u16 host_port, u16 guest_port) noexcept;
+    bool RemovePortForward(bool is_udp, u16 host_port) noexcept;
+    void ClearPortForwards() noexcept;
+    void EnableDynamicPortForwarding(bool enable) noexcept { DynamicPortForwardingEnabled = enable; }
+
 private:
+    void HandleDynamicPortForwarding(u8* data, int len) noexcept;
+    bool DynamicPortForwardingEnabled = false;
+    std::vector<u16> ForwardedPorts;
     static constexpr int PollListMax = 64;
     static const SlirpCb cb;
     static int SlirpCbGetREvents(int idx, void* opaque) noexcept;

@@ -62,6 +62,9 @@ private slots:
     void on_rbDirectMode_clicked();
     void on_rbIndirectMode_clicked();
     void on_cbxDirectAdapter_currentIndexChanged(int sel);
+    void on_rbP2PAuto_clicked();
+    void on_rbP2PManual_clicked();
+    void on_cbEnableP2P_clicked();
 
 private:
     Ui::WifiSettingsDialog* ui;
@@ -70,6 +73,7 @@ private:
     bool haspcap;
 
     void updateAdapterControls();
+    void updateP2PControls();
     std::vector<melonDS::AdapterData> adapters;
 };
 
