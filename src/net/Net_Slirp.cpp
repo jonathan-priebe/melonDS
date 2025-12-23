@@ -435,10 +435,11 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
     if (ethertype == 0x800)
     {
         u8 protocol = data[0x17];
+        u32 dstip = ntohl(*(u32*)&data[0x1E]); // Define dstip here for both UDP and TCP
+
         if (protocol == 0x11) // UDP
         {
             u16 dstport = ntohs(*(u16*)&data[0x24]);
-            u32 dstip = ntohl(*(u32*)&data[0x1E]);
 
             if (dstport == 53 && dstip == kDNSIP) // DNS
             {
