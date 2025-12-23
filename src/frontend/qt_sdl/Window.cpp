@@ -66,6 +66,7 @@
 #include "RAMInfoDialog.h"
 #include "TitleManagerDialog.h"
 #include "PowerManagement/PowerManagementDialog.h"
+#include "LogWindow.h"
 
 #include "Platform.h"
 #include "Config.h"
@@ -672,6 +673,15 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
         }
         {
             QMenu * menu = menubar->addMenu("Help");
+
+            actOpenLogWindow = menu->addAction("Open log window");
+            connect(actOpenLogWindow, &QAction::triggered, this, [&]
+            {
+                LogWindow::openDlg(this);
+            });
+
+            menu->addSeparator();
+
             actAbout = menu->addAction("About...");
             connect(actAbout, &QAction::triggered, this, [&]
             {

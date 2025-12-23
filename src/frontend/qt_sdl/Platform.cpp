@@ -40,6 +40,7 @@
 #include "Net.h"
 #include "MPInterface.h"
 #include "SPI_Firmware.h"
+#include "LogWindow.h"
 
 #ifdef __WIN32__
 #include <io.h>
@@ -316,6 +317,20 @@ void Log(LogLevel level, const char* fmt, ...)
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
+
+    // Also send to LogWindow if it exists
+    char buffer[1024];
+    va_list args2;
+    va_start(args2, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args2);
+    va_end(args2);
+
+    // Remove trailing newline for cleaner display in LogWindow
+    QString message = QString::fromUtf8(buffer);
+    if (message.endsWith('\n'))
+        message.chop(1);
+
+    LogWindow::AppendLog(level, message);
 }
 
 Thread* Thread_Create(std::function<void()> func)

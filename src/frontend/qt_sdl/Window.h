@@ -352,6 +352,7 @@ public:
     QAction* actLimitFramerate;
     QAction* actAudioSync;
 
+    QAction* actOpenLogWindow;
     QAction* actAbout;
 };
 

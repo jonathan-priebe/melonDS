@@ -42,6 +42,8 @@ set(SOURCES_QT_SDL
     AboutDialog.cpp
     AboutDialog.h
     AboutDialog.ui
+    LogWindow.cpp
+    LogWindow.h
     ARCodeQDecl.h
 
     ArchiveUtil.h
