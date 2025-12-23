@@ -438,8 +438,23 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
             // Handle NAT-PMP requests (port 5351 to gateway)
             if (dstport == 5351 && dstip == kServerIP)
             {
+                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: Received NAT-PMP request to port 5351\n");
                 HandleNATPMP(data, len);
                 return len;
+            }
+
+            // Log all UDP packets to gateway for debugging
+            if (dstip == kServerIP)
+            {
+                Platform::Log(Platform::LogLevel::Debug, "Net_Slirp: UDP packet to gateway port %d\n", dstport);
+            }
+
+            // Check for UPnP SSDP (Simple Service Discovery Protocol) on port 1900
+            if (dstport == 1900)
+            {
+                u32 multicast_addr = 0xEFFFFFFA; // 239.255.255.250 in host order
+                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: UPnP SSDP discovery packet detected on port 1900 (dst IP: %08X)\n", dstip);
+                // TODO: Implement UPnP SSDP response if needed
             }
 
             // Handle dynamic port forwarding for outgoing UDP packets
@@ -716,19 +731,30 @@ void Net_Slirp::SendNATPMPResponse(u8 opcode, u16 result_code, u32 epoch, const 
 void Net_Slirp::HandleNATPMP(u8* data, int len) noexcept
 {
     if (len < 0x2A + 2) // Ethernet + IP + UDP headers + version + opcode
+    {
+        Platform::Log(Platform::LogLevel::Warn, "NAT-PMP: Packet too short (%d bytes)\n", len);
         return;
+    }
 
     u8* natpmp_data = &data[0x2A]; // Start of NAT-PMP payload
     int natpmp_len = len - 0x2A;
 
     if (natpmp_len < 2)
+    {
+        Platform::Log(Platform::LogLevel::Warn, "NAT-PMP: Payload too short (%d bytes)\n", natpmp_len);
         return;
+    }
 
     u8 version = natpmp_data[0];
     u8 opcode = natpmp_data[1];
 
+    Platform::Log(Platform::LogLevel::Info, "NAT-PMP: Received request - version=%d, opcode=%d\n", version, opcode);
+
     if (version != 0)
+    {
+        Platform::Log(Platform::LogLevel::Warn, "NAT-PMP: Invalid version %d (expected 0)\n", version);
         return;
+    }
 
     u32 epoch = static_cast<u32>(std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count());
