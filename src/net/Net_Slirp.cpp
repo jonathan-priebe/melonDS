@@ -471,6 +471,18 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
             // Handle dynamic port forwarding for outgoing UDP packets
             HandleDynamicPortForwarding(data, len);
         }
+
+        // Log TCP connections to port 80 (HTTP) for IP check detection
+        if (protocol == 0x06) // TCP
+        {
+            u16 dstport_tcp = ntohs(*(u16*)&data[0x24]);
+            if (dstport_tcp == 80 || dstport_tcp == 443)
+            {
+                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: HTTP(S) connection to %d.%d.%d.%d:%d\n",
+                    (dstip >> 24) & 0xFF, (dstip >> 16) & 0xFF, (dstip >> 8) & 0xFF, dstip & 0xFF,
+                    dstport_tcp);
+            }
+        }
     }
 
     slirp_input(Ctx, data, len);
