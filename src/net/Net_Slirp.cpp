@@ -384,11 +384,22 @@ void Net_Slirp::HandleDynamicPortForwarding(u8* data, int len) noexcept
 
     // Extract source IP and port from outgoing packet
     u32 srcip = ntohl(*(u32*)&data[0x1A]);
+    u32 dstip = ntohl(*(u32*)&data[0x1E]);
     u16 srcport = ntohs(*(u16*)&data[0x22]);
+    u16 dstport = ntohs(*(u16*)&data[0x24]);
 
     // Check if this is from our guest (10.64.0.16)
     if (srcip != kClientIP)
         return;
+
+    // Log where packets are going (for GameSpy server communication debugging)
+    if (srcport >= 1024) // Only log non-system ports
+    {
+        Platform::Log(Platform::LogLevel::Debug, "Net_Slirp: UDP from local port %d to %d.%d.%d.%d:%d\n",
+            srcport,
+            (dstip >> 24) & 0xFF, (dstip >> 16) & 0xFF, (dstip >> 8) & 0xFF, dstip & 0xFF,
+            dstport);
+    }
 
     // Ignore low ports and DNS
     if (srcport < 1024 || srcport == 53)
