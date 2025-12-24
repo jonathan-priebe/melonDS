@@ -324,9 +324,19 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 		struct addrinfo* dns_res;
 		u32 addr_res;
 
-		memset(&dns_hint, 0, sizeof(dns_hint));
-		dns_hint.ai_family = AF_INET; // TODO: other address types (INET6, etc)
-		if (getaddrinfo(domainname, "0", &dns_hint, &dns_res) == 0)
+		// Special handling for conntest.nintendowifi.net - redirect to our gateway
+		if (strcmp(domainname, "conntest.nintendowifi.net") == 0)
+		{
+			addr_res = htonl(kServerIP); // Point to our gateway (10.64.0.1)
+			printf(" -> INTERCEPTED! Redirecting to gateway %d.%d.%d.%d",
+			       (kServerIP >> 24) & 0xFF, (kServerIP >> 16) & 0xFF,
+			       (kServerIP >> 8) & 0xFF, kServerIP & 0xFF);
+		}
+		else
+		{
+			memset(&dns_hint, 0, sizeof(dns_hint));
+			dns_hint.ai_family = AF_INET; // TODO: other address types (INET6, etc)
+			if (getaddrinfo(domainname, "0", &dns_hint, &dns_res) == 0)
         {
             struct addrinfo* p = dns_res;
             while (p)
@@ -347,6 +357,7 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
             printf(" shat itself :(");
             addr_res = 0;
         }
+		}
 
 		printf("\n");
 		curoffset += 4;
@@ -367,6 +378,40 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 
     if (Callback)
         Callback(resp, framelen);
+}
+
+void Net_Slirp::HandleHTTPConntest(u8* data, int len) noexcept
+{
+    // This handles HTTP requests to our fake conntest server
+    // The DS requests its external IP, and we respond with the real external IP
+
+    u32 external_ip = GetExternalIP();
+    if (external_ip == 0)
+    {
+        Platform::Log(Platform::LogLevel::Warn, "HandleHTTPConntest: Could not get external IP\n");
+        return; // Let libslirp handle it normally
+    }
+
+    // Build HTTP response with the external IP
+    char http_body[64];
+    snprintf(http_body, sizeof(http_body), "%d.%d.%d.%d",
+             (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF,
+             (external_ip >> 8) & 0xFF, external_ip & 0xFF);
+
+    char http_response[512];
+    int http_len = snprintf(http_response, sizeof(http_response),
+                           "HTTP/1.0 200 OK\r\n"
+                           "Content-Type: text/plain\r\n"
+                           "Content-Length: %d\r\n"
+                           "\r\n"
+                           "%s",
+                           (int)strlen(http_body), http_body);
+
+    Platform::Log(Platform::LogLevel::Info, "HandleHTTPConntest: Responding with external IP: %s\n", http_body);
+
+    // TODO: Send HTTP response back to DS
+    // This requires building a proper TCP response packet
+    // For now, we'll log it and let libslirp handle it
 }
 
 void Net_Slirp::HandleDynamicPortForwarding(u8* data, int len) noexcept
