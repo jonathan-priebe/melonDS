@@ -86,6 +86,29 @@ ssize_t Net_Slirp::SlirpCbSendPacket(const void* buf, size_t len, void* opaque) 
     Log(LogLevel::Debug, "slirp: response packet of %zu bytes, type %04X\n", len, ntohs(((u16*)buf)[6]));
 
     Net_Slirp& self = *static_cast<Net_Slirp*>(opaque);
+
+    // Check if this is a UDP packet from NATNEG server (port 27901)
+    // We need to intercept and modify the response to fix the IP address
+    u8* data = (u8*)buf;
+    u16 ethertype = ntohs(*(u16*)&data[0xC]);
+
+    if (ethertype == 0x0800 && len > 0x2A) // IPv4
+    {
+        u8 protocol = data[0x17];
+        if (protocol == 0x11) // UDP
+        {
+            u16 srcport = ntohs(*(u16*)&data[0x22]);
+
+            // NATNEG server response (from port 27901)
+            if (srcport == 27901)
+            {
+                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: Intercepted NATNEG response from server\n");
+                // TODO: Modify the packet to replace local IP with external IP
+                // For now, just log it
+            }
+        }
+    }
+
     if (self.Callback)
     {
         self.Callback((const u8*)buf, len);
