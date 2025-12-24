@@ -84,6 +84,7 @@ private:
     static int SlirpCbAddPoll(int fd, int events, void* opaque) noexcept;
     static ssize_t SlirpCbSendPacket(const void* buf, size_t len, void* opaque) noexcept;
     void HandleDNSFrame(u8* data, int len) noexcept;
+    void HandleHTTPConntest(u8* data, int len) noexcept;
 
     Platform::SendPacketCallback Callback;
     pollfd PollList[PollListMax] {};

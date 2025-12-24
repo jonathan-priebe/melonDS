@@ -382,36 +382,17 @@ void Net_Slirp::HandleDNSFrame(u8* data, int len) noexcept
 
 void Net_Slirp::HandleHTTPConntest(u8* data, int len) noexcept
 {
-    // This handles HTTP requests to our fake conntest server
-    // The DS requests its external IP, and we respond with the real external IP
+    // This will handle HTTP requests to our fake conntest server
+    // For now, just log that we detected the request
+    // TODO: Implement TCP response with external IP
 
     u32 external_ip = GetExternalIP();
-    if (external_ip == 0)
+    if (external_ip != 0)
     {
-        Platform::Log(Platform::LogLevel::Warn, "HandleHTTPConntest: Could not get external IP\n");
-        return; // Let libslirp handle it normally
+        Platform::Log(Platform::LogLevel::Info, "HandleHTTPConntest: Detected conntest request, external IP would be: %d.%d.%d.%d\n",
+                     (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF,
+                     (external_ip >> 8) & 0xFF, external_ip & 0xFF);
     }
-
-    // Build HTTP response with the external IP
-    char http_body[64];
-    snprintf(http_body, sizeof(http_body), "%d.%d.%d.%d",
-             (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF,
-             (external_ip >> 8) & 0xFF, external_ip & 0xFF);
-
-    char http_response[512];
-    int http_len = snprintf(http_response, sizeof(http_response),
-                           "HTTP/1.0 200 OK\r\n"
-                           "Content-Type: text/plain\r\n"
-                           "Content-Length: %d\r\n"
-                           "\r\n"
-                           "%s",
-                           (int)strlen(http_body), http_body);
-
-    Platform::Log(Platform::LogLevel::Info, "HandleHTTPConntest: Responding with external IP: %s\n", http_body);
-
-    // TODO: Send HTTP response back to DS
-    // This requires building a proper TCP response packet
-    // For now, we'll log it and let libslirp handle it
 }
 
 void Net_Slirp::HandleDynamicPortForwarding(u8* data, int len) noexcept
@@ -522,7 +503,15 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
         if (protocol == 0x06) // TCP
         {
             u16 dstport_tcp = ntohs(*(u16*)&data[0x24]);
-            if (dstport_tcp == 80 || dstport_tcp == 443)
+
+            // Check if this is HTTP request to our gateway (conntest)
+            if (dstport_tcp == 80 && dstip == kServerIP)
+            {
+                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: HTTP request to gateway (conntest)\n");
+                HandleHTTPConntest(data, len);
+                // Let libslirp handle it for now, we're just logging
+            }
+            else if (dstport_tcp == 80 || dstport_tcp == 443)
             {
                 Platform::Log(Platform::LogLevel::Info, "Net_Slirp: HTTP(S) connection to %d.%d.%d.%d:%d\n",
                     (dstip >> 24) & 0xFF, (dstip >> 16) & 0xFF, (dstip >> 8) & 0xFF, dstip & 0xFF,
