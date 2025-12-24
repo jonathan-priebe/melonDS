@@ -100,11 +100,30 @@ ssize_t Net_Slirp::SlirpCbSendPacket(const void* buf, size_t len, void* opaque) 
             u16 srcport = ntohs(*(u16*)&data[0x22]);
 
             // NATNEG server response (from port 27901)
-            if (srcport == 27901)
+            if (srcport == 27901 && len >= 0x2A + 8) // Need at least 8 bytes of NATNEG payload
             {
-                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: Intercepted NATNEG response from server\n");
-                // TODO: Modify the packet to replace local IP with external IP
-                // For now, just log it
+                // NATNEG packet structure (after UDP header at 0x2A):
+                // The payload may contain IP addresses that need to be replaced
+
+                u32 external_ip = self.GetExternalIP();
+                if (external_ip != 0)
+                {
+                    // Search for local IP in the NATNEG payload and replace it
+                    u8* payload = &data[0x2A]; // Start of UDP payload
+                    int payload_len = len - 0x2A;
+
+                    // The local IP might be in network byte order (big endian) in the packet
+                    // We need to search for 192.168.178.125 = 0xC0A8B27D in network order
+                    // But libslirp might have already translated it, so let's just replace any private IP
+
+                    // For now, let's log what we found
+                    Platform::Log(Platform::LogLevel::Info, "Net_Slirp: NATNEG response - External IP available: %d.%d.%d.%d\n",
+                                 (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF,
+                                 (external_ip >> 8) & 0xFF, external_ip & 0xFF);
+
+                    // TODO: Implement actual IP replacement in NATNEG payload
+                    // This requires understanding the exact NATNEG packet format
+                }
             }
         }
     }
@@ -516,6 +535,33 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
                 u32 multicast_addr = 0xEFFFFFFA; // 239.255.255.250 in host order
                 Platform::Log(Platform::LogLevel::Info, "Net_Slirp: UPnP SSDP discovery packet detected on port 1900 (dst IP: %08X)\n", dstip);
                 // TODO: Implement UPnP SSDP response if needed
+            }
+
+            // Check if this is a NATNEG packet (to port 27901) - we need to modify source IP
+            if (dstport == 27901)
+            {
+                u32 external_ip = GetExternalIP();
+                if (external_ip != 0)
+                {
+                    // Replace the source IP in the IP header with our external IP
+                    // This makes the NATNEG server see our real public IP instead of local IP
+                    u32 old_srcip = ntohl(*(u32*)&data[0x1A]);
+                    *(u32*)&data[0x1A] = htonl(external_ip);
+
+                    // Recalculate IP checksum
+                    *(u16*)&data[0x18] = 0; // Clear old checksum
+                    u32 sum = 0;
+                    u8* ipheader = &data[0xE];
+                    for (int i = 0; i < 20; i += 2)
+                        sum += ntohs(*(u16*)&ipheader[i]);
+                    while (sum >> 16)
+                        sum = (sum & 0xFFFF) + (sum >> 16);
+                    *(u16*)&data[0x18] = htons(~sum);
+
+                    Platform::Log(Platform::LogLevel::Info, "Net_Slirp: Modified NATNEG packet source IP from %d.%d.%d.%d to %d.%d.%d.%d\n",
+                                 (old_srcip >> 24) & 0xFF, (old_srcip >> 16) & 0xFF, (old_srcip >> 8) & 0xFF, old_srcip & 0xFF,
+                                 (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF, (external_ip >> 8) & 0xFF, external_ip & 0xFF);
+                }
             }
 
             // Handle dynamic port forwarding for outgoing UDP packets
