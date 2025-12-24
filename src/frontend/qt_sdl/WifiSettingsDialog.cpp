@@ -97,6 +97,9 @@ WifiSettingsDialog::WifiSettingsDialog(QWidget* parent) : QDialog(parent), ui(ne
     ui->spinPortRangeStart->setValue(portStart);
     ui->spinPortRangeEnd->setValue(portEnd);
 
+    std::string externalIP = cfg.GetString("LAN.P2P.ExternalIP");
+    ui->txtExternalIP->setText(QString::fromStdString(externalIP));
+
     updateAdapterControls();
     updateP2PControls();
 }
@@ -126,6 +129,7 @@ void WifiSettingsDialog::done(int r)
         cfg.SetBool("LAN.P2P.AutoMode", ui->rbP2PAuto->isChecked());
         cfg.SetInt("LAN.P2P.PortRangeStart", ui->spinPortRangeStart->value());
         cfg.SetInt("LAN.P2P.PortRangeEnd", ui->spinPortRangeEnd->value());
+        cfg.SetString("LAN.P2P.ExternalIP", ui->txtExternalIP->text().toStdString());
 
         int sel = ui->cbxDirectAdapter->currentIndex();
         if (sel < 0 || sel >= adapters.size()) sel = 0;

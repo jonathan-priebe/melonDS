@@ -136,6 +136,25 @@ void NetInit()
                     slirp->AddPortForward(true, port, port);  // UDP
                 }
             }
+
+            // Set external IP if configured
+            std::string externalIPStr = cfg.GetString("LAN.P2P.ExternalIP");
+            if (!externalIPStr.empty())
+            {
+                // Parse IP string (e.g., "78.43.62.62") into u32
+                u32 ip = 0;
+                int a, b, c, d;
+                if (sscanf(externalIPStr.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) == 4)
+                {
+                    ip = (a << 24) | (b << 16) | (c << 8) | d;
+                    slirp->SetExternalIP(ip);
+                    Platform::Log(Platform::LogLevel::Info, "Net: Using configured external IP: %d.%d.%d.%d\n", a, b, c, d);
+                }
+                else
+                {
+                    Platform::Log(Platform::LogLevel::Warn, "Net: Invalid external IP format: %s\n", externalIPStr.c_str());
+                }
+            }
         }
 
         net.SetDriver(std::move(slirp));

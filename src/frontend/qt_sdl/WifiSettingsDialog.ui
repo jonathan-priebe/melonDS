@@ -172,6 +172,27 @@
            </item>
           </layout>
          </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayoutExternalIP">
+           <item>
+            <widget class="QLabel" name="lblExternalIP">
+             <property name="text">
+              <string>External IP (optional):</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="txtExternalIP">
+             <property name="whatsThis">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Your public IP address (e.g., 56.168.1.100). Leave empty for automatic detection. Required for P2P connections when automatic detection fails.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
+             <property name="placeholderText">
+              <string>e.g., 56.168.1.100</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
         </layout>
        </widget>
       </item>
