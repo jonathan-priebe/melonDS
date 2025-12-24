@@ -58,6 +58,16 @@
        </widget>
       </item>
       <item row="2" column="0">
+       <widget class="QRadioButton" name="rbBridgeMode">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Bridge mode creates a virtual TAP interface that connects directly to your network. melonDS will appear as a separate device on your LAN with its own IP address (e.g., 192.168.178.223). This allows multiple melonDS instances or other devices to connect via P2P.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Requires: Wintun driver on Windows or /dev/net/tun access on Linux.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Bridge mode (TAP interface, for local P2P)</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
        <widget class="QRadioButton" name="rbDirectMode">
         <property name="whatsThis">
          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Direct mode directly routes network traffic to the host network. It is the most reliable, but requires an ethernet connection.&lt;/p&gt;&lt;p&gt;&lt;br/&gt;&lt;/p&gt;&lt;p&gt;Non-direct mode uses a layer of emulation to get around this, but is more prone to problems.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -194,6 +204,91 @@
           </layout>
          </item>
         </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_Bridge">
+     <property name="title">
+      <string>Bridge mode settings</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_Bridge">
+      <item>
+       <widget class="QRadioButton" name="rbBridgeDHCP">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Automatically obtain IP address from your router via DHCP (recommended).&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Automatic (DHCP from router)</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="rbBridgeStatic">
+        <property name="whatsThis">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Manually configure a static IP address. Make sure the IP is not in your router's DHCP range to avoid conflicts.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+        <property name="text">
+         <string>Static IP address</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QFormLayout" name="formLayoutBridge">
+        <item row="0" column="0">
+         <widget class="QLabel" name="lblBridgeIP">
+          <property name="text">
+           <string>IP Address:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="txtBridgeIP">
+          <property name="placeholderText">
+           <string>e.g., 192.168.178.223</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="lblBridgeNetmask">
+          <property name="text">
+           <string>Netmask:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="txtBridgeNetmask">
+          <property name="placeholderText">
+           <string>e.g., 255.255.255.0</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="lblBridgeGateway">
+          <property name="text">
+           <string>Gateway:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLineEdit" name="txtBridgeGateway">
+          <property name="placeholderText">
+           <string>e.g., 192.168.178.1</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblBridgeStatus">
+        <property name="text">
+         <string>Status: Not connected</string>
+        </property>
        </widget>
       </item>
      </layout>

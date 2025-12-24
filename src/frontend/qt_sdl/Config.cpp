@@ -115,6 +115,8 @@ DefaultList<bool> DefaultBools =
     {"DSi.DSP.HLE", true},
     {"LAN.EnableP2P", false},
     {"LAN.P2P.AutoMode", true},
+    {"LAN.BridgeMode", false},
+    {"LAN.Bridge.UseDHCP", true},
 };
 
 DefaultList<std::string> DefaultStrings =
@@ -122,7 +124,10 @@ DefaultList<std::string> DefaultStrings =
     {"DLDI.ImagePath",                  "dldi.bin"},
     {"DSi.SD.ImagePath",                "dsisd.bin"},
     {"Instance*.Firmware.Username",     "melonDS"},
-    {"LAN.P2P.ExternalIP",              ""}
+    {"LAN.P2P.ExternalIP",              ""},
+    {"LAN.Bridge.StaticIP",             ""},
+    {"LAN.Bridge.Netmask",              "255.255.255.0"},
+    {"LAN.Bridge.Gateway",              ""}
 };
 
 DefaultList<double> DefaultDoubles =

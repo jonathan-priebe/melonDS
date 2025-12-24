@@ -563,6 +563,59 @@ int Net_Slirp::SendPacket(u8* data, int len) noexcept
                                  (external_ip >> 24) & 0xFF, (external_ip >> 16) & 0xFF, (external_ip >> 8) & 0xFF, external_ip & 0xFF);
                 }
             }
+            // Check if this is a QR server packet (to port 27900) - we need to fix publicip
+            else if (dstport == 27900)
+            {
+                u32 external_ip = GetExternalIP();
+                if (external_ip != 0 && len > 0x2A)
+                {
+                    // QR packets contain "publicip\0<decimal_value>\0"
+                    // We need to find and replace this value
+                    u8* udp_payload = &data[0x2A]; // UDP payload starts at 0x2A
+                    int payload_len = len - 0x2A;
+
+                    // Search for "publicip\0" string
+                    for (int i = 0; i < payload_len - 20; i++)
+                    {
+                        if (memcmp(&udp_payload[i], "publicip\0", 9) == 0)
+                        {
+                            // Found publicip field, now find the value
+                            int value_start = i + 9;
+                            int value_end = value_start;
+
+                            // Find end of decimal string (next \0)
+                            while (value_end < payload_len && udp_payload[value_end] != 0)
+                                value_end++;
+
+                            if (value_end < payload_len)
+                            {
+                                // Convert external IP to decimal string
+                                char new_ip_str[16];
+                                snprintf(new_ip_str, sizeof(new_ip_str), "%u", external_ip);
+
+                                int old_len = value_end - value_start;
+                                int new_len = strlen(new_ip_str);
+
+                                // Log the modification
+                                Platform::Log(Platform::LogLevel::Info, "Net_Slirp: Replacing publicip in QR packet: old=%.*s new=%s\n",
+                                             old_len, &udp_payload[value_start], new_ip_str);
+
+                                // Only replace if new value fits
+                                if (new_len <= old_len)
+                                {
+                                    memcpy(&udp_payload[value_start], new_ip_str, new_len);
+                                    memset(&udp_payload[value_start + new_len], 0, old_len - new_len);
+                                }
+                                else
+                                {
+                                    Platform::Log(Platform::LogLevel::Warn, "Net_Slirp: New publicip too long, cannot replace\n");
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
 
             // Handle dynamic port forwarding for outgoing UDP packets
             HandleDynamicPortForwarding(data, len);

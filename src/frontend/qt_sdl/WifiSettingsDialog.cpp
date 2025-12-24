@@ -78,10 +78,23 @@ WifiSettingsDialog::WifiSettingsDialog(QWidget* parent) : QDialog(parent), ui(ne
     }
     ui->cbxDirectAdapter->setCurrentIndex(sel);
 
-    // errrr???
+    // Network mode selection
     bool direct = cfg.GetBool("LAN.DirectMode");
-    ui->rbDirectMode->setChecked(direct);
-    ui->rbIndirectMode->setChecked(!direct);
+    bool bridge = cfg.GetBool("LAN.BridgeMode");
+
+    if (bridge)
+    {
+        ui->rbBridgeMode->setChecked(true);
+    }
+    else if (direct)
+    {
+        ui->rbDirectMode->setChecked(true);
+    }
+    else
+    {
+        ui->rbIndirectMode->setChecked(true);
+    }
+
     if (!haspcap) ui->rbDirectMode->setEnabled(false);
 
     // P2P settings
@@ -100,8 +113,22 @@ WifiSettingsDialog::WifiSettingsDialog(QWidget* parent) : QDialog(parent), ui(ne
     std::string externalIP = cfg.GetString("LAN.P2P.ExternalIP");
     ui->txtExternalIP->setText(QString::fromStdString(externalIP));
 
+    // Bridge mode settings
+    bool useDHCP = cfg.GetBool("LAN.Bridge.UseDHCP");
+    ui->rbBridgeDHCP->setChecked(useDHCP);
+    ui->rbBridgeStatic->setChecked(!useDHCP);
+
+    std::string bridgeIP = cfg.GetString("LAN.Bridge.StaticIP");
+    std::string bridgeNetmask = cfg.GetString("LAN.Bridge.Netmask");
+    std::string bridgeGateway = cfg.GetString("LAN.Bridge.Gateway");
+
+    ui->txtBridgeIP->setText(QString::fromStdString(bridgeIP));
+    ui->txtBridgeNetmask->setText(QString::fromStdString(bridgeNetmask));
+    ui->txtBridgeGateway->setText(QString::fromStdString(bridgeGateway));
+
     updateAdapterControls();
     updateP2PControls();
+    updateBridgeControls();
 }
 
 WifiSettingsDialog::~WifiSettingsDialog()
@@ -124,12 +151,22 @@ void WifiSettingsDialog::done(int r)
     {
         auto& cfg = emuInstance->getGlobalConfig();
 
+        // Network mode
         cfg.SetBool("LAN.DirectMode", ui->rbDirectMode->isChecked());
+        cfg.SetBool("LAN.BridgeMode", ui->rbBridgeMode->isChecked());
+
+        // P2P settings
         cfg.SetBool("LAN.EnableP2P", ui->cbEnableP2P->isChecked());
         cfg.SetBool("LAN.P2P.AutoMode", ui->rbP2PAuto->isChecked());
         cfg.SetInt("LAN.P2P.PortRangeStart", ui->spinPortRangeStart->value());
         cfg.SetInt("LAN.P2P.PortRangeEnd", ui->spinPortRangeEnd->value());
         cfg.SetString("LAN.P2P.ExternalIP", ui->txtExternalIP->text().toStdString());
+
+        // Bridge mode settings
+        cfg.SetBool("LAN.Bridge.UseDHCP", ui->rbBridgeDHCP->isChecked());
+        cfg.SetString("LAN.Bridge.StaticIP", ui->txtBridgeIP->text().toStdString());
+        cfg.SetString("LAN.Bridge.Netmask", ui->txtBridgeNetmask->text().toStdString());
+        cfg.SetString("LAN.Bridge.Gateway", ui->txtBridgeGateway->text().toStdString());
 
         int sel = ui->cbxDirectAdapter->currentIndex();
         if (sel < 0 || sel >= adapters.size()) sel = 0;
@@ -188,14 +225,20 @@ void WifiSettingsDialog::on_cbxDirectAdapter_currentIndexChanged(int sel)
 void WifiSettingsDialog::updateAdapterControls()
 {
     bool directMode = ui->rbDirectMode->isChecked();
-    bool enable = haspcap && directMode;
+    bool bridgeMode = ui->rbBridgeMode->isChecked();
+    bool indirectMode = ui->rbIndirectMode->isChecked();
 
-    ui->cbxDirectAdapter->setEnabled(enable);
-    ui->lblAdapterMAC->setEnabled(enable);
-    ui->lblAdapterIP->setEnabled(enable);
+    // Direct mode controls
+    bool enableDirect = haspcap && directMode;
+    ui->cbxDirectAdapter->setEnabled(enableDirect);
+    ui->lblAdapterMAC->setEnabled(enableDirect);
+    ui->lblAdapterIP->setEnabled(enableDirect);
 
     // P2P settings are only available in indirect mode
-    ui->groupBox_P2P->setEnabled(!directMode);
+    ui->groupBox_P2P->setEnabled(indirectMode);
+
+    // Bridge mode settings are only available in bridge mode
+    ui->groupBox_Bridge->setEnabled(bridgeMode);
 }
 
 void WifiSettingsDialog::updateP2PControls()
@@ -226,4 +269,42 @@ void WifiSettingsDialog::on_rbP2PAuto_clicked()
 void WifiSettingsDialog::on_rbP2PManual_clicked()
 {
     updateP2PControls();
+}
+
+void WifiSettingsDialog::updateBridgeControls()
+{
+    bool staticIP = ui->rbBridgeStatic->isChecked();
+
+    // Static IP fields only enabled when Static IP is selected
+    ui->lblBridgeIP->setEnabled(staticIP);
+    ui->txtBridgeIP->setEnabled(staticIP);
+    ui->lblBridgeNetmask->setEnabled(staticIP);
+    ui->txtBridgeNetmask->setEnabled(staticIP);
+    ui->lblBridgeGateway->setEnabled(staticIP);
+    ui->txtBridgeGateway->setEnabled(staticIP);
+}
+
+void WifiSettingsDialog::on_rbIndirectMode_clicked()
+{
+    updateAdapterControls();
+}
+
+void WifiSettingsDialog::on_rbBridgeMode_clicked()
+{
+    updateAdapterControls();
+}
+
+void WifiSettingsDialog::on_rbDirectMode_clicked()
+{
+    updateAdapterControls();
+}
+
+void WifiSettingsDialog::on_rbBridgeDHCP_clicked()
+{
+    updateBridgeControls();
+}
+
+void WifiSettingsDialog::on_rbBridgeStatic_clicked()
+{
+    updateBridgeControls();
 }
